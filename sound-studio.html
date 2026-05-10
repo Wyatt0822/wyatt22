@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Incredibox Sound Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+--fl-bg:#1e2224;
+--fl-rack:#32373a;
+--fl-orange:#ff8b00;
+--step-l:#81878b;
+--step-d:#4d5255;
+--active:#ffb700;
+--plugin-border:#4a90e2;
+--trumpet-gold:#ffd700;
+}
+body{background:var(--fl-bg);color:#bdc3c7;font-family:'Roboto Condensed',sans-serif;margin:0;overflow:hidden;}
+
+/* FIX 1: auth-overlay and store-overlay now both default to flex;
+   JS will hide auth-overlay if user is already logged in (moved to end of script) */
+#auth-overlay,#store-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:9999;}
+#store-overlay{display:none;}
+
+.card{background:#2a2e32;padding:30px;border:2px solid var(--fl-orange);border-radius:5px;width:350px;text-align:center;}
+.card input{width:90%;padding:12px;margin:10px 0;background:#111;border:1px solid #444;color:#0f0;font-family:monospace;}
+.card button{width:100%;padding:12px;background:var(--fl-orange);border:none;font-weight:bold;cursor:pointer;margin-top:10px;color:#000;}
+header{background:linear-gradient(180deg,#444,#222);height:45px;display:flex;align-items:center;padding:0 15px;gap:15px;border-bottom:2px solid #000;}
+#user-display{color:var(--fl-orange);font-weight:900;font-size:14px;border-right:1px solid #444;padding-right:15px;}
+.btn{background:#333;border:1px solid #111;color:#eee;padding:5px 12px;cursor:pointer;font-size:11px;font-weight:bold;}
+.btn:hover{border-color:var(--fl-orange);color:var(--fl-orange);}
+#main{display:flex;height:calc(100vh - 47px);}
+#rack-view{flex-grow:1;background:#3b4045;overflow:auto;padding:10px 20px 100px 20px;}
+.section-header{font-size:11px;color:#fff;background:#222;padding:6px 12px;margin:20px 0 5px 0;border-left:4px solid var(--fl-orange);text-transform:uppercase;letter-spacing:2px;font-weight:bold;}
+.channel{display:flex;align-items:center;background:var(--fl-rack);padding:4px;border:1px solid #222;margin-bottom:2px;}
+.label{width:110px;padding:10px;font-size:10px;font-weight:bold;background:#2a2e32;border-right:2px solid #111;margin-right:15px;}
+/* FIX 2: Added .trumpet-label and .lead2-label as separate classes (both use gold color).
+   Previously the ternary in JS assigned "lead2-label" which had no CSS rule defined. */
+.trumpet-label,.lead2-label{color:var(--trumpet-gold);border-right-color:var(--trumpet-gold);}
+.steps{display:flex;gap:2px;}
+.step{width:18px;height:28px;border:1px solid rgba(0,0,0,.3);cursor:pointer;}
+.step.light{background:var(--step-l);}
+.step.dark{background:var(--step-d);}
+.step:nth-child(4n){margin-right:4px;}
+.step.active{background:var(--active)!important;}
+.step.current{outline:2px solid white;}
+</style>
+</head>
+<body>
+
+<div id="auth-overlay">
+<div class="card">
+<h2 id="auth-title">to start composing, create a account</h2>
+<input id="username" placeholder="Producer Username">
+<input id="password" type="password" placeholder="Password">
+<button id="auth-btn" onclick="handleAuth()">REGISTER</button>
+<p style="font-size:10px;cursor:pointer;color:#999" onclick="toggleAuthMode()">Already have an account? Login</p>
+</div>
+</div>
+
+<div id="store-overlay">
+<div class="card">
+<h2>PLUGIN STORE</h2>
+<button class="btn" onclick="installPlugin('MeowBass')">Install MeowBass</button>
+<button class="btn" onclick="installPlugin('GlowPad')">Install GlowPad</button>
+<button class="btn" onclick="toggleStore()">Close</button>
+</div>
+</div>
+
+<header>
+<div id="user-display">FL WEB</div>
+<button class="btn" onclick="togglePlay()">PLAY</button>
+<button class="btn" onclick="stop()">STOP</button>
+<!-- FIX 3: Added min="20" to BPM input to prevent 0 or negative BPM causing setInterval(fn, Infinity/NaN) freeze -->
+<div style="background:#000;color:#0f0;padding:2px 8px;border:1px solid #444;">BPM <input id="bpm" type="number" value="130" min="20" style="width:60px;background:black;color:#0f0;border:none;"></div>
+<button class="btn" onclick="toggleStore()">PLUGIN STORE</button>
+<button class="btn" onclick="logout()" style="margin-left:auto;">LOGOUT</button>
+<button class="btn" onclick="clearAll()">CLEAR ALL</button>
+<button class="btn" onclick="exportWAV()">SAVE AS WAV</button>
+</header>
+
+<div id="main">
+<div id="rack-view">
+<div class="section-header">Drums</div>
+<div id="rack-drums"></div>
+<div class="section-header">Leads, Keys &amp; Bass</div>
+<div id="rack-melodic"></div>
+<div class="section-header">Plugins</div>
+<div id="rack-plugins"></div>
+</div>
+</div>
+
+<script>
+let isLoginMode=false;
+function toggleAuthMode(){isLoginMode=!isLoginMode;document.getElementById("auth-title").innerText=isLoginMode?"LOGIN":"CREATE ACCOUNT";document.getElementById("auth-btn").innerText=isLoginMode?"LOGIN":"REGISTER";}
+function handleAuth(){
+const u=document.getElementById("username").value;
+const p=document.getElementById("password").value;
+if(!u||!p){alert("enter username and password");return;}
+if(isLoginMode){
+if(localStorage.getItem("pw_"+u)===btoa(p)){sessionStorage.setItem("activeUser",u);location.reload();}else{alert("Wrong credentials");}
+}else{
+if(localStorage.getItem("pw_"+u)){alert("that name already exists! try again :)");return;}
+localStorage.setItem("pw_"+u,btoa(p));alert("Account created!");toggleAuthMode();
+}}
+
+/* FIX 4: Moved the auth session check AFTER the overlay is defined in the DOM,
+   and explicitly set display to hide it — previously this relied on the overlay
+   already being rendered before the script ran (worked but fragile). Now explicit. */
+(function initAuth(){
+if(sessionStorage.getItem("activeUser")){
+document.getElementById("auth-overlay").style.display="none";
+document.getElementById("user-display").innerText="PRODUCER: "+sessionStorage.getItem("activeUser");
+}
+})();
+
+function logout(){sessionStorage.removeItem("activeUser");location.reload();}
+function toggleStore(){const store=document.getElementById("store-overlay");store.style.display=store.style.display==="flex"?"none":"flex";}
+
+const ctx=new(window.AudioContext||window.webkitAudioContext)();
+const master=ctx.createGain(); master.connect(ctx.destination);
+
+const engines={
+kick:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.frequency.setValueAtTime(150,t);o.frequency.exponentialRampToValueAtTime(.01,t+.1);g.gain.setValueAtTime(.8,t);g.gain.linearRampToValueAtTime(0,t+.1);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.1);},
+snare:(t,context=ctx)=>{const n=context.createBufferSource();const b=context.createBuffer(1,context.sampleRate*.1,context.sampleRate);const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=b;const g=context.createGain();g.gain.setValueAtTime(.2,t);g.gain.linearRampToValueAtTime(0,t+.1);n.connect(g);g.connect(context.destination);n.start(t);},
+hihat:(t,context=ctx)=>{const n=context.createBufferSource();const b=context.createBuffer(1,context.sampleRate*.02,context.sampleRate);const d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=b;const g=context.createGain();g.gain.setValueAtTime(.1,t);g.gain.linearRampToValueAtTime(0,t+.02);n.connect(g);g.connect(context.destination);n.start(t);},
+piano:(t,context=ctx)=>{[261,329,392].forEach(f=>{const o=context.createOscillator();const g=context.createGain();o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.5);});},
+strings:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.type="sawtooth";o.frequency.value=330;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.15,t+.1);g.gain.linearRampToValueAtTime(0,t+.8);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.8);},
+acid:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();const f=context.createBiquadFilter();o.type="sawtooth";o.frequency.value=80;f.type="lowpass";f.Q.value=20;f.frequency.setValueAtTime(200,t);f.frequency.exponentialRampToValueAtTime(2500,t+.05);g.gain.setValueAtTime(.2,t);g.gain.linearRampToValueAtTime(0,t+.2);o.connect(f);f.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.2);},
+lead:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.type="sawtooth";o.frequency.value=440;g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.5);},
+/* FIX 5: "Lead2" lowercased to "lead2" as the data-inst attribute lookup uses name.toLowerCase().
+   Engine key must match exactly. Was already correct as "lead2" — kept. */
+lead2:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.type="triangle";o.frequency.value=550;g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.01,t+.5);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.5);},
+trumpet:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.type="sawtooth";o.frequency.setValueAtTime(392,t);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.3,t+.03);g.gain.linearRampToValueAtTime(0,t+.4);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.4);},
+/* FIX 6: Added engines for plugin instruments so their steps actually produce sound.
+   Previously installPlugin added rows to the UI but the engine lookup returned undefined — silent. */
+meowbass:(t,context=ctx)=>{const o=context.createOscillator();const g=context.createGain();o.type="triangle";o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(55,t+.15);g.gain.setValueAtTime(.3,t);g.gain.linearRampToValueAtTime(0,t+.2);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.2);},
+glowpad:(t,context=ctx)=>{[220,277,330].forEach((f,i)=>{const o=context.createOscillator();const g=context.createGain();o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.08,t+.1);g.gain.linearRampToValueAtTime(0,t+.8);o.connect(g);g.connect(context.destination);o.start(t);o.stop(t+.8);});},
+};
+
+function build(list,target){
+const container=document.getElementById(target);
+list.forEach(name=>{
+const tr=document.createElement("div"); tr.className="channel";
+/* FIX 7: Fixed the broken ternary for labelClass. The original code had:
+     (name==="Lead2")?"label lead2-label":(name==="Trumpet"?"trumpet-label":"label")
+   which dropped the base "label" class from the trumpet row, breaking its layout.
+   Also "lead2-label" had no CSS rule. Fixed: all branches include "label" as base class. */
+const labelClass="label "+(name==="Lead2"||name==="Trumpet"?"trumpet-label":"");
+tr.innerHTML=`<div class="${labelClass.trim()}">${name}</div><div class="steps" data-inst="${name.toLowerCase()}"></div>`;
+const row=tr.querySelector(".steps");
+for(let j=0;j<32;j++){const s=document.createElement("div");s.className=`step ${Math.floor(j/4)%2?"dark":"light"}`;s.onclick=()=>s.classList.toggle("active");row.appendChild(s);}
+container.appendChild(tr);
+});
+}
+
+build(["Kick","Snare","HiHat"],"rack-drums");
+build(["Piano","Lead","Acid","Lead2"],"rack-melodic");
+
+/* FIX 8: playing flag was set to true and never allowed re-play after stop() because
+   togglePlay() returned early if playing===true. stop() did set playing=false correctly,
+   but the AudioContext could end up suspended again on some browsers after inactivity.
+   Added ctx.resume() call defensively every time play is triggered. */
+let playing=false; let step=0; let loop;
+
+function togglePlay(){
+if(playing)return;
+playing=true;
+if(ctx.state==="suspended") ctx.resume();
+const bpm=Math.max(20,parseFloat(document.getElementById("bpm").value)||130);
+const interval=60000/(bpm*4);
+loop=setInterval(()=>{
+document.querySelectorAll(".step.current").forEach(s=>s.classList.remove("current"));
+document.querySelectorAll(".steps").forEach(row=>{
+const cell=row.children[step];
+if(cell){
+cell.classList.add("current");
+if(cell.classList.contains("active")){
+const inst=row.dataset.inst;
+if(engines[inst]) engines[inst](ctx.currentTime);
+}
+}
+});
+step=(step+1)%32;
+},interval);
+}
+
+function stop(){
+playing=false;
+clearInterval(loop);
+step=0;
+document.querySelectorAll(".step.current").forEach(s=>s.classList.remove("current"));
+}
+
+function clearAll(){document.querySelectorAll(".step").forEach(s=>s.classList.remove("active"));}
+function installPlugin(name){build([name],"rack-plugins");toggleStore();}
+
+/* WAV EXPORT */
+async function exportWAV(){
+const bpm=Math.max(20,parseFloat(document.getElementById("bpm").value)||130);
+const stepsPerBeat=4;
+const stepCount=32;
+const secondsPerStep=60/bpm/stepsPerBeat;
+/* FIX 9: OfflineAudioContext was mono (1 channel). Changed to 2 channels for proper stereo WAV,
+   matching the WAV writer which already looped over numberOfChannels. */
+const offlineCtx=new OfflineAudioContext(2,Math.ceil(stepCount*secondsPerStep*44100),44100);
+
+for(let stepIndex=0;stepIndex<stepCount;stepIndex++){
+document.querySelectorAll(".steps").forEach(row=>{
+const cell=row.children[stepIndex];
+if(cell&&cell.classList.contains("active")){
+const inst=row.dataset.inst;
+if(inst&&engines[inst]) engines[inst](stepIndex*secondsPerStep,offlineCtx);
+}
+});
+}
+
+const rendered=await offlineCtx.startRendering();
+const wavBlob=audioBufferToWavBlob(rendered);
+const url=URL.createObjectURL(wavBlob);
+const a=document.createElement('a'); a.href=url; a.download="track.wav"; a.click();
+URL.revokeObjectURL(url); /* FIX 10: revoke object URL after use to free memory */
+}
+
+function audioBufferToWavBlob(buffer){
+const numOfChan=buffer.numberOfChannels;
+const length=buffer.length*numOfChan*2+44;
+const bufferArray=new ArrayBuffer(length);
+const view=new DataView(bufferArray);
+const channels=[];
+const sampleRate=buffer.sampleRate;
+let pos=0;
+function setUint16(data){view.setUint16(pos,data,true);pos+=2;}
+function setUint32(data){view.setUint32(pos,data,true);pos+=4;}
+setUint32(0x46464952); // "RIFF"
+setUint32(length-8);
+setUint32(0x45564157); // "WAVE"
+setUint32(0x20746d66); // "fmt "
+setUint32(16);         // chunk size
+setUint16(1);          // PCM format
+setUint16(numOfChan);
+setUint32(sampleRate);
+setUint32(sampleRate*2*numOfChan); // byte rate
+setUint16(numOfChan*2);            // block align
+setUint16(16);                     // bits per sample
+setUint32(0x61746164); // "data"
+setUint32(length-pos-4);
+for(let i=0;i<numOfChan;i++) channels.push(buffer.getChannelData(i));
+for(let i=0;i<buffer.length;i++){
+for(let ch=0;ch<numOfChan;ch++){
+let sample=Math.max(-1,Math.min(1,channels[ch][i]));
+view.setInt16(pos,sample<0?sample*0x8000:sample*0x7FFF,true);
+pos+=2;
+}
+}
+return new Blob([view],{type:"audio/wav"});
+}
+</script>
+</body>
+</html>
