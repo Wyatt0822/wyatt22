@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Locked Github Page</title>
+
+  <style>
+    body{
+      margin:0;
+      font-family:Arial, sans-serif;
+      background:#0d1117;
+      color:white;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+    }
+
+    .container{
+      background:#161b22;
+      padding:40px;
+      border-radius:12px;
+      text-align:center;
+      width:350px;
+      box-shadow:0 0 20px rgba(0,0,0,0.5);
+    }
+
+    h1{
+      color:#58a6ff;
+    }
+
+    input{
+      width:100%;
+      padding:12px;
+      margin-top:15px;
+      border:none;
+      border-radius:6px;
+      background:#21262d;
+      color:white;
+    }
+
+    button{
+      margin-top:15px;
+      width:100%;
+      padding:12px;
+      border:none;
+      border-radius:6px;
+      background:#238636;
+      color:white;
+      cursor:pointer;
+      font-size:16px;
+    }
+
+    button:hover{
+      background:#2ea043;
+    }
+
+    .hidden{
+      display:none;
+    }
+
+    .error{
+      color:red;
+      margin-top:10px;
+    }
+
+    a{
+      color:#58a6ff;
+      text-decoration:none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOCK SCREEN -->
+  <div class="container" id="lockScreen">
+    <h1>Website Locked</h1>
+    <p>Enter the secret code to continue</p>
+    <p> think of every 762 neocities domain, even ones that were replaced</p>
+
+    <input type="password" id="codeInput" placeholder="Enter Code">
+    <button onclick="unlock()">Unlock</button>
+
+    <div class="error" id="error"></div>
+  </div>
+
+  <!-- REAL WEBSITE -->
+  <div class="container hidden" id="realSite">
+    <h1>Welcome!</h1>
+    <p>You unlocked the page.</p>
+
+    <p>
+theres sadly nothin here yet.
+    </p>
+  </div>
+
+  <script>
+    // SECRET CODE
+    const secretCode = "MarkusnewhomeMissing0762c3eLost-Elsewhere";
+
+    function unlock() {
+      const input = document.getElementById("codeInput").value;
+      const error = document.getElementById("error");
+
+      if(input === secretCode){
+        document.getElementById("lockScreen").classList.add("hidden");
+        document.getElementById("realSite").classList.remove("hidden");
+      } else {
+        error.innerText = "Wrong code!";
+      }
+    }
+  </script>
+
+</body>
+</html>
